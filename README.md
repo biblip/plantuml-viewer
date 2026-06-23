@@ -1,74 +1,152 @@
-# Getting Started with Create React App
+# PlantUML Viewer
 
-Download plant UML jar https://github.com/plantuml/plantuml/releases
+PlantUML Viewer is a result-first PlantUML workspace built around one rule: the diagram stays primary, and the source is available when you need it.
 
-Latest working version: plantuml-1.2026.2.jar
+The app renders PlantUML diagrams through a local PlantUML server, presents the diagram in a dedicated canvas, and keeps source editing in a slide-out drawer.
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## What this project is for
 
-## Available Scripts
+- Render PlantUML diagrams locally in the browser.
+- Keep the diagram visible as the main working surface.
+- Open the source editor only when editing is needed.
+- Switch between light and dark presentation modes.
+- Use fit controls and zoom controls without losing the diagram context.
 
-In the project directory, you can run:
+## Current UX model
 
-### `npm start`
+The current interface is intentionally biased toward the rendered result:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- The top bar stays visible while the page scrolls.
+- `Open Source` / `Close Source` controls the source drawer.
+- `Full width` and `Full height` are fit modes, not toggles.
+- Zoom controls are separate from fit modes.
+- `Ctrl/Cmd + E` toggles the source drawer.
+- `Ctrl + mouse wheel` zooms the diagram.
+- The theme switch changes both the UI chrome and the diagram palette.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+The source drawer is for editing and copying source.
 
-### `npm test`
+## Features
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- Result-first canvas with responsive viewport sizing.
+- Source editor in a drawer overlay.
+- Live rerendering after source edits.
+- Light and dark UI themes.
+- Theme-aware PlantUML styling injected into the source before render.
+- Fit-to-width and fit-to-height modes.
+- Zoom in, zoom out, and reset zoom controls.
 
-### `npm run build`
+## How it works
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+The app is a React frontend that talks to a local PlantUML server running on port `9090`.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Rendering flow:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. The source is edited in the drawer.
+2. The app injects theme-specific `skinparam` values into the PlantUML text.
+3. The rendered text is compressed and encoded.
+4. The viewer requests an SVG from the local PlantUML server.
+5. The diagram is displayed inside the main canvas.
 
-### `npm run eject`
+The viewer component lives in [`src/component/PlantUMLViewer.js`](./src/component/PlantUMLViewer.js).
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Prerequisites
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- Node.js and npm
+- Java
+- A local PlantUML server JAR
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+The server script currently expects:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+- `plantuml-1.2026.2.jar`
 
-## Learn More
+If you update the PlantUML version, update the jar name in [`server/start-server.sh`](./server/start-server.sh).
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Run locally
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Start the PlantUML server first:
 
-### Code Splitting
+```bash
+./server/start-server.sh
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Then start the React app in another terminal:
 
-### Analyzing the Bundle Size
+```bash
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+The app runs on:
 
-### Making a Progressive Web App
+- `http://127.0.0.1:4000`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+The PlantUML server runs on:
 
-### Advanced Configuration
+- `http://127.0.0.1:9090`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## Build
 
-### Deployment
+Create a production build with:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+```bash
+npm run build
+```
 
-### `npm run build` fails to minify
+This produces the static bundle in `build/`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Available scripts
+
+From `package.json`:
+
+- `npm start` - runs the React app on `127.0.0.1:4000`
+- `npm run build` - creates the production build
+- `npm test` - runs the test runner
+- `npm run eject` - ejects from Create React App
+
+## Repository layout
+
+- [`src/App.js`](./src/App.js) - main UI, state, controls, and source drawer
+- [`src/App.css`](./src/App.css) - layout, theme, toolbar, and drawer styling
+- [`src/component/PlantUMLViewer.js`](./src/component/PlantUMLViewer.js) - PlantUML SVG rendering component
+- [`src/component/encode64.js`](./src/component/encode64.js) - PlantUML encoding helper
+- [`public/index.html`](./public/index.html) - document shell, title, favicon links
+- [`public/manifest.json`](./public/manifest.json) - PWA metadata and icons
+- [`public/plantuml-icon.svg`](./public/plantuml-icon.svg) - source for the app icon family
+- [`public/favicon.ico`](./public/favicon.ico) - legacy favicon fallback
+- [`public/logo192.png`](./public/logo192.png) - install icon
+- [`public/logo512.png`](./public/logo512.png) - high-resolution install icon
+- [`server/start-server.sh`](./server/start-server.sh) - local PlantUML server launcher
+
+## Design notes
+
+The interface intentionally avoids a split-view editor layout. The diagram remains the dominant surface, while source editing is treated as a secondary, temporary action. The toolbar uses compact icon buttons so the top bar stays readable and stable even when the workspace is narrow.
+
+Dark mode is tuned for diagram readability rather than pure inversion. The viewer background, chrome, and injected PlantUML theme values are coordinated so the diagram remains legible across common shapes like use cases, sequence diagrams, states, and components.
+
+## Branding assets
+
+This project uses a minimal connected-nodes mark derived from the current product icon set.
+
+Included assets:
+
+- SVG favicon source
+- ICO fallback favicon
+- 192x192 app icon
+- 512x512 install icon
+
+## Maintenance notes
+
+- Keep the PlantUML server version in sync with the local script.
+- Regenerate the icon assets from `public/plantuml-icon.svg` if branding changes.
+- When adjusting theme colors, update both the React chrome and the injected PlantUML `skinparam` blocks so the viewer and rendered diagram stay visually aligned.
+
+## Status
+
+This repository is currently centered on the viewer experience, not on general-purpose PlantUML authoring. The main product decisions are already reflected in the code:
+
+- diagram-first layout
+- source drawer for editing
+- fit controls plus zoom
+- light and dark themes
+- compact toolbar and brand-specific icons
+
