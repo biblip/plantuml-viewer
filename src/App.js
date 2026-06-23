@@ -120,6 +120,35 @@ const applyThemeToSource = (source, theme) => {
   return `${source.slice(0, insertAt)}${themeBlock}\n${source.slice(insertAt)}`;
 };
 
+const mapRenderedLineToSourceLine = (source, renderedSource, theme, lineNumber) => {
+  if (!source || !renderedSource || !lineNumber || lineNumber < 1) {
+    return null;
+  }
+
+  const themeBlock = THEME_BLOCKS[theme] || THEME_BLOCKS.dark;
+  const endTag = '@enduml';
+  const insertAt = renderedSource.lastIndexOf(endTag);
+
+  if (insertAt === -1) {
+    return lineNumber;
+  }
+
+  const originalPrefix = renderedSource.slice(0, insertAt);
+  const sourceLineCountBeforeInsert = originalPrefix.split(/\r?\n/).length;
+  const themeLineCount = themeBlock.split(/\r?\n/).length;
+  const sourceLineCount = source.split(/\r?\n/).length;
+
+  if (lineNumber <= sourceLineCountBeforeInsert) {
+    return lineNumber;
+  }
+
+  if (lineNumber <= sourceLineCountBeforeInsert + themeLineCount) {
+    return Math.max(1, sourceLineCount);
+  }
+
+  return Math.max(1, Math.min(sourceLineCount, lineNumber - themeLineCount));
+};
+
 const useElementSize = (ref) => {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -156,7 +185,17 @@ const SourceDrawer = ({
   onCopy,
   copyLabel,
   editorRef,
+  renderState,
+  renderError,
+  highlightedLine,
+  activeTab,
+  onTabChange,
 }) => {
+  const activeError = renderError || (renderState.status === 'error' ? renderState : null);
+  const sourceLines = source.split(/\r?\n/);
+  const gutterWidth = `${String(Math.max(sourceLines.length, 1)).length + 0.75}ch`;
+  const [editorScroll, setEditorScroll] = useState({ top: 0, left: 0 });
+
   return (
     <>
       <button
@@ -185,21 +224,110 @@ const SourceDrawer = ({
           </div>
 
           <div className="drawer-body">
-            <section className="editor-panel">
-              <div className="panel-label-row">
-                <span className="panel-label">Source</span>
-                <span className="panel-hint">Ctrl/Cmd+E toggles the drawer</span>
-              </div>
-              <textarea
-                className="source-editor"
-                value={source}
-                onChange={(event) => onChange(event.target.value)}
-                ref={editorRef}
-                spellCheck={false}
-                wrap="off"
-                aria-label="PlantUML source editor"
-              />
-            </section>
+            <div className="drawer-tabs" role="tablist" aria-label="Drawer content tabs">
+              <button
+                type="button"
+                id="drawer-tab-source"
+                className={`drawer-tab ${activeTab === 'source' ? 'is-active' : ''}`}
+                role="tab"
+                aria-selected={activeTab === 'source'}
+                aria-controls="drawer-source-panel"
+                onClick={() => onTabChange('source')}
+              >
+                Source
+              </button>
+              <button
+                type="button"
+                id="drawer-tab-error"
+                className={`drawer-tab ${activeTab === 'error' ? 'is-active' : ''} ${activeError ? 'has-error' : ''}`}
+                role="tab"
+                aria-selected={activeTab === 'error'}
+                aria-controls="drawer-error-panel"
+                onClick={() => onTabChange('error')}
+              >
+                Error
+                {activeError ? <span className="drawer-tab-badge">1</span> : null}
+              </button>
+            </div>
+
+            {activeTab === 'source' ? (
+              <section
+                id="drawer-source-panel"
+                className="drawer-panel editor-panel"
+                role="tabpanel"
+                aria-labelledby="drawer-tab-source"
+              >
+                <div className="panel-label-row">
+                  <span className="panel-label">Source</span>
+                  <span className="panel-hint">Ctrl/Cmd+E toggles the drawer</span>
+                </div>
+                <div className="source-editor-frame" style={{ '--source-gutter-width': gutterWidth }}>
+                  <div className="source-editor-gutter" aria-hidden="true">
+                    <div
+                      className="source-editor-gutter-inner"
+                      style={{
+                        transform: `translateY(${-editorScroll.top}px)`,
+                      }}
+                    >
+                      {sourceLines.map((line, index) => {
+                        const lineNumber = index + 1;
+                        const isHighlighted = highlightedLine === lineNumber;
+
+                        return (
+                          <div key={`${lineNumber}-${line}`} className="source-editor-line-row">
+                            <span className="source-editor-line-number">
+                              {lineNumber}
+                              {isHighlighted ? <span className="source-editor-line-badge">!</span> : null}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <textarea
+                    className="source-editor"
+                    value={source}
+                    onChange={(event) => onChange(event.target.value)}
+                    onScroll={(event) => {
+                      setEditorScroll({
+                        top: event.currentTarget.scrollTop,
+                        left: event.currentTarget.scrollLeft,
+                      });
+                    }}
+                    ref={editorRef}
+                    spellCheck={false}
+                    wrap="off"
+                    aria-label="PlantUML source editor"
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {activeTab === 'error' ? (
+              <section
+                id="drawer-error-panel"
+                className="drawer-panel"
+                role="tabpanel"
+                aria-labelledby="drawer-tab-error"
+              >
+                <div className="drawer-error-panel">
+                  <div className="drawer-error-copy">
+                    <p className="drawer-error-kicker">Renderer diagnostics</p>
+                    <h3>{activeError ? activeError.message : 'No renderer errors reported.'}</h3>
+                    {activeError && activeError.line ? (
+                      <p className="drawer-error-line">Approximate source line {activeError.line}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="drawer-error-details">
+                    <div className="drawer-error-label">Details</div>
+                    <pre>
+                      {activeError ? activeError.details || activeError.message : 'The renderer has not reported an issue for the current source.'}
+                    </pre>
+                  </div>
+                </div>
+              </section>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -289,6 +417,9 @@ const App = () => {
   const [zoom, setZoom] = useState(100);
   const [theme, setTheme] = useState('dark');
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [renderState, setRenderState] = useState({ status: 'idle' });
+  const [renderError, setRenderError] = useState(null);
+  const [activeDrawerTab, setActiveDrawerTab] = useState('source');
   const debounceRef = useRef(null);
   const copyResetRef = useRef(null);
   const editorRef = useRef(null);
@@ -331,12 +462,16 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (drawerOpen) {
+    if (drawerOpen && activeDrawerTab === 'source') {
       window.setTimeout(() => {
         editorRef.current?.focus();
       }, 0);
     }
-  }, [drawerOpen]);
+  }, [drawerOpen, activeDrawerTab]);
+
+  const handleDrawerTabChange = (nextTab) => {
+    setActiveDrawerTab(nextTab);
+  };
 
   const handleCopy = async () => {
     try {
@@ -433,7 +568,29 @@ const App = () => {
     });
   };
 
+  const handleRenderStateChange = (nextState) => {
+    setRenderState(nextState);
+
+    if (nextState.status === 'error') {
+      setRenderError({
+        status: 'error',
+        message: nextState.message || 'PlantUML reported an error while rendering this diagram.',
+        details: nextState.details || '',
+        line: nextState.line ?? null,
+      });
+      return;
+    }
+
+    if (nextState.status === 'ready' || nextState.status === 'idle' || nextState.status === 'loading') {
+      setRenderError(null);
+    }
+  };
+
   const themedSource = applyThemeToSource(renderedSource, theme);
+  const highlightedSourceLine =
+    renderError && renderError.line
+      ? mapRenderedLineToSourceLine(source, renderedSource, theme, renderError.line)
+      : null;
 
   return (
     <div className={`app-shell theme-${theme} ${drawerOpen ? 'is-drawer-open' : ''}`}>
@@ -509,6 +666,7 @@ const App = () => {
                 className="main-diagram-image"
                 style={{ width: '100%', height: '100%' }}
                 onLoad={handleImageLoad}
+                onStatusChange={handleRenderStateChange}
               />
             </div>
           </div>
@@ -523,6 +681,11 @@ const App = () => {
         onCopy={handleCopy}
         copyLabel={copyLabel}
         editorRef={editorRef}
+        renderState={renderState}
+        renderError={renderError}
+        highlightedLine={highlightedSourceLine}
+        activeTab={activeDrawerTab}
+        onTabChange={handleDrawerTabChange}
       />
     </div>
   );
