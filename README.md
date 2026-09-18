@@ -58,9 +58,9 @@ The viewer component lives in [`src/component/PlantUMLViewer.js`](./src/componen
 
 The server script currently expects:
 
-- `plantuml-1.2026.2.jar`
+- `plantuml-1.2026.8.jar`
 
-If you update the PlantUML version, update the jar name in [`server/start-server.sh`](./server/start-server.sh).
+If you update the PlantUML version, update the jar name in the server launchers under [`server/`](./server/).
 
 ## Configure the PlantUML server URL
 
