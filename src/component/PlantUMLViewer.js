@@ -2,6 +2,8 @@ import React from 'react';
 import pako from 'pako';
 import encode64 from './encode64';
 
+const DEFAULT_PLANTUML_SERVER_PATH = '/plantuml/';
+
 const ERROR_MARKERS = [
   /syntax error\??/i,
   /assumed diagram type:/i,
@@ -57,6 +59,42 @@ const extractDiagnostic = (svgText) => {
   };
 };
 
+const normalizeBaseUrl = (value) => {
+  if (!value || typeof value !== 'string') {
+    return '';
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return '';
+  }
+
+  try {
+    const resolved = typeof window !== 'undefined' ? new URL(trimmed, window.location.origin) : new URL(trimmed);
+    const pathname = resolved.pathname.endsWith('/') ? resolved.pathname : `${resolved.pathname}/`;
+
+    return `${resolved.origin}${pathname}`;
+  } catch {
+    return '';
+  }
+};
+
+const getPlantUmlServerBaseUrl = () => {
+  const configuredUrl = typeof process !== 'undefined' ? process.env.REACT_APP_PLANTUML_SERVER_URL : '';
+  const normalizedConfiguredUrl = normalizeBaseUrl(configuredUrl);
+
+  if (normalizedConfiguredUrl) {
+    return normalizedConfiguredUrl;
+  }
+
+  if (typeof window !== 'undefined') {
+    return new URL(DEFAULT_PLANTUML_SERVER_PATH, window.location.origin).toString();
+  }
+
+  return 'http://127.0.0.1:9090/plantuml/';
+};
+
 const PlantUMLViewer = ({
   text,
   className = '',
@@ -89,11 +127,8 @@ const PlantUMLViewer = ({
       const utf8String = unescape(encodeURIComponent(text));
       const compressed = pako.deflate(utf8String, { to: 'string', level: 9 });
       const encodedString = encode64(compressed);
-      const protocol = window.location.protocol;
-      const hostname = window.location.hostname;
-      const port = '9090';
-      const basePath = '/plantuml/svg/~1';
-      const nextSrc = `${protocol}//${hostname}:${port}${basePath}${encodedString}`;
+      const baseUrl = getPlantUmlServerBaseUrl();
+      const nextSrc = new URL(`svg/~1${encodedString}`, baseUrl).toString();
       diagnosticRef.current = null;
       setSrc(nextSrc);
       onStatusChangeRef.current?.({ status: 'loading' });

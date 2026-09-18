@@ -38,14 +38,14 @@ The source drawer is for editing and copying source.
 
 ## How it works
 
-The app is a React frontend that talks to a local PlantUML server running on port `9090`.
+The app is a React frontend that talks to a configurable PlantUML server.
 
 Rendering flow:
 
 1. The source is edited in the drawer.
 2. The app injects theme-specific `skinparam` values into the PlantUML text.
 3. The rendered text is compressed and encoded.
-4. The viewer requests an SVG from the local PlantUML server.
+4. The viewer requests an SVG from the configured PlantUML server.
 5. The diagram is displayed inside the main canvas.
 
 The viewer component lives in [`src/component/PlantUMLViewer.js`](./src/component/PlantUMLViewer.js).
@@ -61,6 +61,22 @@ The server script currently expects:
 - `plantuml-1.2026.2.jar`
 
 If you update the PlantUML version, update the jar name in [`server/start-server.sh`](./server/start-server.sh).
+
+## Configure the PlantUML server URL
+
+The viewer reads `REACT_APP_PLANTUML_SERVER_URL` at build time.
+
+For deployment on `brumor.pbxkey.com`, use the PlantUML server URL:
+
+```bash
+REACT_APP_PLANTUML_SERVER_URL=http://brumor.pbxkey.com:9090/plantuml/
+```
+
+If you want to use a different host or scheme, keep the `/plantuml/` context path at the end of the URL.
+
+The repository includes a production env file with that default so production builds inherit the server URL automatically.
+
+The viewer will still try to fetch the SVG for error inspection; if cross-origin fetch is blocked, the image can still render, but detailed renderer diagnostics will be skipped.
 
 ## Run locally
 
@@ -80,6 +96,8 @@ The app runs on:
 
 - `http://127.0.0.1:4000`
 
+The development server listens on all interfaces on port `4000` during local development.
+
 The PlantUML server runs on:
 
 - `http://127.0.0.1:9090`
@@ -98,7 +116,7 @@ This produces the static bundle in `build/`.
 
 From `package.json`:
 
-- `npm start` - runs the React app on `127.0.0.1:4000`
+- `npm start` - runs the React app on `0.0.0.0:4000`
 - `npm run build` - creates the production build
 - `npm test` - runs the test runner
 - `npm run eject` - ejects from Create React App
@@ -149,4 +167,3 @@ This repository is currently centered on the viewer experience, not on general-p
 - fit controls plus zoom
 - light and dark themes
 - compact toolbar and brand-specific icons
-
