@@ -95,6 +95,19 @@ const getPlantUmlServerBaseUrl = () => {
   return 'http://127.0.0.1:9090/plantuml/';
 };
 
+export const buildPlantUmlUrl = (text, format = 'svg') => {
+  if (!text) {
+    return '';
+  }
+
+  const utf8String = unescape(encodeURIComponent(text));
+  const compressed = pako.deflate(utf8String, { to: 'string', level: 9 });
+  const encodedString = encode64(compressed);
+  const baseUrl = getPlantUmlServerBaseUrl();
+
+  return new URL(`${format}/~1${encodedString}`, baseUrl).toString();
+};
+
 const PlantUMLViewer = ({
   text,
   className = '',
@@ -124,11 +137,7 @@ const PlantUMLViewer = ({
     }
 
     try {
-      const utf8String = unescape(encodeURIComponent(text));
-      const compressed = pako.deflate(utf8String, { to: 'string', level: 9 });
-      const encodedString = encode64(compressed);
-      const baseUrl = getPlantUmlServerBaseUrl();
-      const nextSrc = new URL(`svg/~1${encodedString}`, baseUrl).toString();
+      const nextSrc = buildPlantUmlUrl(text, 'svg');
       diagnosticRef.current = null;
       setSrc(nextSrc);
       onStatusChangeRef.current?.({ status: 'loading' });

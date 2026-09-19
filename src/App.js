@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import PlantUMLViewer from './component/PlantUMLViewer';
+import PlantUMLViewer, { buildPlantUmlUrl } from './component/PlantUMLViewer';
 import './App.css';
 
 const SAMPLE_DIAGRAM = `@startuml
@@ -35,6 +35,12 @@ const MODE_OPTIONS = [
 const ZOOM_STEP = 10;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 200;
+const EXPORT_OPTIONS = [
+  { id: 'svg', label: 'SVG', extension: 'svg', mime: 'image/svg+xml' },
+  { id: 'png', label: 'PNG', extension: 'png', mime: 'image/png' },
+  { id: 'txt', label: 'ASCII text', extension: 'txt', mime: 'text/plain;charset=utf-8' },
+  { id: 'map', label: 'Image map', extension: 'html', mime: 'text/html;charset=utf-8' },
+];
 
 const THEME_BLOCKS = {
   dark: `skinparam backgroundColor transparent
@@ -106,6 +112,30 @@ skinparam packageBorderColor #334155`,
 
 const BUTTON_STYLE = {
   type: 'button',
+};
+
+const downloadBlob = (blob, filename) => {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+};
+
+const copyBlobToClipboard = async (blob) => {
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    throw new Error('Clipboard image copying is unavailable.');
+  }
+
+  const clipboardBlob = blob.type ? blob : new Blob([blob], { type: 'image/png' });
+  await navigator.clipboard.write([
+    new window.ClipboardItem({
+      [clipboardBlob.type]: clipboardBlob,
+    }),
+  ]);
 };
 
 const applyThemeToSource = (source, theme) => {
@@ -408,6 +438,111 @@ const DiagramControls = ({
   );
 };
 
+const ExportMenu = ({
+  open,
+  busyFormat,
+  position,
+  onToggle,
+  onExport,
+  menuRef,
+}) => {
+  return (
+    <div className="export-menu-shell" ref={menuRef}>
+      <button
+        className="export-trigger-button"
+        onClick={onToggle}
+        aria-label="Export diagram"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        {...BUTTON_STYLE}
+      >
+        <svg className="toolbar-icon" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M10 3.2v8.1" />
+          <path d="M6.9 8.4 10 11.5l3.1-3.1" />
+          <path d="M4.2 13.6v1.8c0 .8.6 1.4 1.4 1.4h8.8c.8 0 1.4-.6 1.4-1.4v-1.8" />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          className="export-menu"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+          }}
+          role="menu"
+          aria-label="Export diagram as"
+        >
+          {EXPORT_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              className="export-menu-item"
+              onClick={() => onExport(option.id)}
+              role="menuitem"
+              disabled={busyFormat === option.id}
+              {...BUTTON_STYLE}
+            >
+              <span>{busyFormat === option.id ? 'Exporting' : option.label}</span>
+              <span className="export-menu-extension">.{option.extension}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const DiagramContextMenu = ({
+  position,
+  busyFormat,
+  copyBusy,
+  onCopy,
+  onExport,
+  menuRef,
+}) => {
+  if (!position) {
+    return null;
+  }
+
+  return (
+    <div
+      className="diagram-context-menu"
+      ref={menuRef}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+      }}
+      role="menu"
+      aria-label="Diagram actions"
+    >
+      <button
+        className="export-menu-item"
+        onClick={onCopy}
+        role="menuitem"
+        disabled={copyBusy}
+        {...BUTTON_STYLE}
+      >
+        <span>{copyBusy ? 'Copying' : 'Copy image'}</span>
+        <span className="export-menu-extension">PNG</span>
+      </button>
+      <div className="export-menu-divider" role="presentation" />
+      <div className="export-menu-label">Export</div>
+      {EXPORT_OPTIONS.map((option) => (
+        <button
+          key={option.id}
+          className="export-menu-item"
+          onClick={() => onExport(option.id)}
+          role="menuitem"
+          disabled={busyFormat === option.id}
+          {...BUTTON_STYLE}
+        >
+          <span>{busyFormat === option.id ? 'Exporting' : `Export ${option.label}`}</span>
+          <span className="export-menu-extension">.{option.extension}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const App = () => {
   const [source, setSource] = useState(SAMPLE_DIAGRAM);
   const [renderedSource, setRenderedSource] = useState(SAMPLE_DIAGRAM);
@@ -420,10 +555,17 @@ const App = () => {
   const [renderState, setRenderState] = useState({ status: 'idle' });
   const [renderError, setRenderError] = useState(null);
   const [activeDrawerTab, setActiveDrawerTab] = useState('source');
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportMenuPosition, setExportMenuPosition] = useState({ x: 8, y: 8 });
+  const [contextMenuPosition, setContextMenuPosition] = useState(null);
+  const [exportState, setExportState] = useState({ status: 'idle', format: null });
+  const [copyDiagramState, setCopyDiagramState] = useState({ status: 'idle' });
   const debounceRef = useRef(null);
   const copyResetRef = useRef(null);
   const editorRef = useRef(null);
   const viewportRef = useRef(null);
+  const exportMenuRef = useRef(null);
+  const contextMenuRef = useRef(null);
   const viewportSize = useElementSize(viewportRef);
 
   useEffect(() => {
@@ -446,6 +588,8 @@ const App = () => {
 
       if (event.key === 'Escape') {
         setDrawerOpen(false);
+        setExportMenuOpen(false);
+        setContextMenuPosition(null);
       }
     };
 
@@ -459,6 +603,21 @@ const App = () => {
 
   useEffect(() => {
     return () => clearTimeout(copyResetRef.current);
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setExportMenuOpen(false);
+      }
+
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target)) {
+        setContextMenuPosition(null);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
   useEffect(() => {
@@ -587,6 +746,99 @@ const App = () => {
   };
 
   const themedSource = applyThemeToSource(renderedSource, theme);
+  const handleCopyDiagram = async () => {
+    if (copyDiagramState.status === 'loading') {
+      return;
+    }
+
+    setExportMenuOpen(false);
+    setContextMenuPosition(null);
+    setCopyDiagramState({ status: 'loading' });
+
+    try {
+      const exportUrl = buildPlantUmlUrl(themedSource, 'png');
+      const response = await fetch(exportUrl, { cache: 'no-store' });
+
+      if (!response.ok) {
+        throw new Error(`Copy failed with HTTP ${response.status}`);
+      }
+
+      const responseBlob = await response.blob();
+      await copyBlobToClipboard(responseBlob);
+      setCopyDiagramState({ status: 'ready' });
+    } catch {
+      setCopyDiagramState({ status: 'error' });
+    } finally {
+      window.setTimeout(() => {
+        setCopyDiagramState({ status: 'idle' });
+      }, 1200);
+    }
+  };
+
+  const handleExportDiagram = async (formatId) => {
+    const exportOption = EXPORT_OPTIONS.find((option) => option.id === formatId);
+
+    if (!exportOption || exportState.status === 'loading') {
+      return;
+    }
+
+    setExportMenuOpen(false);
+    setContextMenuPosition(null);
+    setExportState({ status: 'loading', format: formatId });
+
+    try {
+      const exportUrl = buildPlantUmlUrl(themedSource, formatId);
+      const response = await fetch(exportUrl, { cache: 'no-store' });
+
+      if (!response.ok) {
+        throw new Error(`Export failed with HTTP ${response.status}`);
+      }
+
+      const responseBlob = await response.blob();
+      const blob = responseBlob.type
+        ? responseBlob
+        : new Blob([responseBlob], { type: exportOption.mime });
+
+      downloadBlob(blob, `plantuml-diagram.${exportOption.extension}`);
+      setExportState({ status: 'ready', format: formatId });
+    } catch {
+      setExportState({ status: 'error', format: formatId });
+    } finally {
+      window.setTimeout(() => {
+        setExportState((current) => (current.format === formatId ? { status: 'idle', format: null } : current));
+      }, 1200);
+    }
+  };
+
+  const handleDiagramContextMenu = (event) => {
+    event.preventDefault();
+    const menuWidth = 196;
+    const menuHeight = 236;
+
+    setExportMenuOpen(false);
+    setContextMenuPosition({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight)),
+    });
+  };
+
+  const handleExportMenuToggle = (event) => {
+    setContextMenuPosition(null);
+
+    if (exportMenuOpen) {
+      setExportMenuOpen(false);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 196;
+    setExportMenuPosition({
+      x: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth)),
+      y: Math.max(8, rect.bottom + 8),
+    });
+    setExportMenuOpen(true);
+  };
+
   const highlightedSourceLine =
     renderError && renderError.line
       ? mapRenderedLineToSourceLine(source, renderedSource, theme, renderError.line)
@@ -619,6 +871,14 @@ const App = () => {
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onResetZoom={handleResetZoom}
+          />
+          <ExportMenu
+            open={exportMenuOpen}
+            busyFormat={exportState.status === 'loading' ? exportState.format : null}
+            position={exportMenuPosition}
+            onToggle={handleExportMenuToggle}
+            onExport={handleExportDiagram}
+            menuRef={exportMenuRef}
           />
           <button
             className={`source-toggle-button ${drawerOpen ? 'is-open' : 'is-closed'}`}
@@ -653,7 +913,7 @@ const App = () => {
 
       <main className="workspace">
         <section className="diagram-card" aria-label="PlantUML result canvas">
-          <div className="diagram-stage" ref={viewportRef} onWheel={handleDiagramWheel}>
+          <div className="diagram-stage" ref={viewportRef} onWheel={handleDiagramWheel} onContextMenu={handleDiagramContextMenu}>
             <div
               className="diagram-canvas"
               style={{
@@ -672,6 +932,15 @@ const App = () => {
           </div>
         </section>
       </main>
+
+      <DiagramContextMenu
+        position={contextMenuPosition}
+        busyFormat={exportState.status === 'loading' ? exportState.format : null}
+        copyBusy={copyDiagramState.status === 'loading'}
+        onCopy={handleCopyDiagram}
+        onExport={handleExportDiagram}
+        menuRef={contextMenuRef}
+      />
 
       <SourceDrawer
         open={drawerOpen}
