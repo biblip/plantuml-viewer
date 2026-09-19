@@ -731,6 +731,8 @@ const App = () => {
     }
 
     event.preventDefault();
+    setExportMenuOpen(false);
+    setContextMenuPosition(null);
     dragDepthRef.current += 1;
     setDragActive(true);
   };
@@ -763,6 +765,8 @@ const App = () => {
     }
 
     event.preventDefault();
+    setExportMenuOpen(false);
+    setContextMenuPosition(null);
     dragDepthRef.current = 0;
     setDragActive(false);
 
