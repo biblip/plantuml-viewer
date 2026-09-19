@@ -41,6 +41,8 @@ const EXPORT_OPTIONS = [
   { id: 'txt', label: 'ASCII text', extension: 'txt', mime: 'text/plain;charset=utf-8' },
   { id: 'map', label: 'Image map', extension: 'html', mime: 'text/html;charset=utf-8' },
 ];
+const PLANTUML_FILE_EXTENSIONS = ['.puml', '.plantuml', '.uml', '.iuml', '.pu', '.wsd', '.txt'];
+const PLANTUML_FILE_ACCEPT = PLANTUML_FILE_EXTENSIONS.join(',');
 
 const THEME_BLOCKS = {
   dark: `skinparam backgroundColor transparent
@@ -123,6 +125,23 @@ const downloadBlob = (blob, filename) => {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+};
+
+const getFileExtension = (filename = '') => {
+  const dotIndex = filename.lastIndexOf('.');
+  return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : '';
+};
+
+const isPlantUmlFile = (file) => {
+  const extension = getFileExtension(file.name);
+  return PLANTUML_FILE_EXTENSIONS.includes(extension) || file.type.startsWith('text/');
+};
+
+const normalizePlantUmlFilename = (filename = 'diagram.puml') => {
+  const trimmed = filename.trim() || 'diagram.puml';
+  const hasKnownExtension = PLANTUML_FILE_EXTENSIONS.includes(getFileExtension(trimmed));
+
+  return hasKnownExtension ? trimmed : `${trimmed}.puml`;
 };
 
 const copyBlobToClipboard = async (blob) => {
@@ -213,7 +232,11 @@ const SourceDrawer = ({
   onChange,
   onClose,
   onCopy,
+  onOpenFile,
+  onSaveFile,
   copyLabel,
+  fileLabel,
+  fileStatus,
   editorRef,
   renderState,
   renderError,
@@ -254,30 +277,40 @@ const SourceDrawer = ({
           </div>
 
           <div className="drawer-body">
-            <div className="drawer-tabs" role="tablist" aria-label="Drawer content tabs">
-              <button
-                type="button"
-                id="drawer-tab-source"
-                className={`drawer-tab ${activeTab === 'source' ? 'is-active' : ''}`}
-                role="tab"
-                aria-selected={activeTab === 'source'}
-                aria-controls="drawer-source-panel"
-                onClick={() => onTabChange('source')}
-              >
-                Source
-              </button>
-              <button
-                type="button"
-                id="drawer-tab-error"
-                className={`drawer-tab ${activeTab === 'error' ? 'is-active' : ''} ${activeError ? 'has-error' : ''}`}
-                role="tab"
-                aria-selected={activeTab === 'error'}
-                aria-controls="drawer-error-panel"
-                onClick={() => onTabChange('error')}
-              >
-                Error
-                {activeError ? <span className="drawer-tab-badge">1</span> : null}
-              </button>
+            <div className="drawer-tab-row">
+              <div className="drawer-tabs" role="tablist" aria-label="Drawer content tabs">
+                <button
+                  type="button"
+                  id="drawer-tab-source"
+                  className={`drawer-tab ${activeTab === 'source' ? 'is-active' : ''}`}
+                  role="tab"
+                  aria-selected={activeTab === 'source'}
+                  aria-controls="drawer-source-panel"
+                  onClick={() => onTabChange('source')}
+                >
+                  Source
+                </button>
+                <button
+                  type="button"
+                  id="drawer-tab-error"
+                  className={`drawer-tab ${activeTab === 'error' ? 'is-active' : ''} ${activeError ? 'has-error' : ''}`}
+                  role="tab"
+                  aria-selected={activeTab === 'error'}
+                  aria-controls="drawer-error-panel"
+                  onClick={() => onTabChange('error')}
+                >
+                  Error
+                  {activeError ? <span className="drawer-tab-badge">1</span> : null}
+                </button>
+              </div>
+              <div className="drawer-file-actions">
+                <button className="ghost-button" onClick={onOpenFile} {...BUTTON_STYLE}>
+                  Open
+                </button>
+                <button className="ghost-button" onClick={onSaveFile} {...BUTTON_STYLE}>
+                  Save
+                </button>
+              </div>
             </div>
 
             {activeTab === 'source' ? (
@@ -289,7 +322,7 @@ const SourceDrawer = ({
               >
                 <div className="panel-label-row">
                   <span className="panel-label">Source</span>
-                  <span className="panel-hint">Ctrl/Cmd+E toggles the drawer</span>
+                  <span className="panel-hint">{fileStatus || fileLabel || 'Ctrl/Cmd+E toggles the drawer'}</span>
                 </div>
                 <div className="source-editor-frame" style={{ '--source-gutter-width': gutterWidth }}>
                   <div className="source-editor-gutter" aria-hidden="true">
@@ -548,6 +581,9 @@ const App = () => {
   const [renderedSource, setRenderedSource] = useState(SAMPLE_DIAGRAM);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [copyLabel, setCopyLabel] = useState('Copy source');
+  const [fileLabel, setFileLabel] = useState('');
+  const [fileStatus, setFileStatus] = useState('');
+  const [dragActive, setDragActive] = useState(false);
   const [mode, setMode] = useState('fitWidth');
   const [zoom, setZoom] = useState(100);
   const [theme, setTheme] = useState('dark');
@@ -562,6 +598,9 @@ const App = () => {
   const [copyDiagramState, setCopyDiagramState] = useState({ status: 'idle' });
   const debounceRef = useRef(null);
   const copyResetRef = useRef(null);
+  const fileStatusResetRef = useRef(null);
+  const dragDepthRef = useRef(0);
+  const fileInputRef = useRef(null);
   const editorRef = useRef(null);
   const viewportRef = useRef(null);
   const exportMenuRef = useRef(null);
@@ -606,6 +645,10 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    return () => clearTimeout(fileStatusResetRef.current);
+  }, []);
+
+  useEffect(() => {
     const handlePointerDown = (event) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
         setExportMenuOpen(false);
@@ -630,6 +673,101 @@ const App = () => {
 
   const handleDrawerTabChange = (nextTab) => {
     setActiveDrawerTab(nextTab);
+  };
+
+  const setTemporaryFileStatus = (nextStatus) => {
+    setFileStatus(nextStatus);
+    clearTimeout(fileStatusResetRef.current);
+    fileStatusResetRef.current = window.setTimeout(() => {
+      setFileStatus('');
+    }, 1600);
+  };
+
+  const loadPlantUmlFile = async (file) => {
+    if (!file) {
+      return;
+    }
+
+    if (!isPlantUmlFile(file)) {
+      setTemporaryFileStatus('Unsupported file type');
+      return;
+    }
+
+    try {
+      const nextSource = await file.text();
+      setSource(nextSource);
+      setRenderedSource(nextSource);
+      setFileLabel(file.name);
+      setTemporaryFileStatus(`Opened ${file.name}`);
+      setDrawerOpen(true);
+      setActiveDrawerTab('source');
+      setRenderError(null);
+      setRenderState({ status: 'loading' });
+    } catch {
+      setTemporaryFileStatus('Unable to open file');
+    }
+  };
+
+  const handleOpenFile = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileInputChange = (event) => {
+    const [file] = Array.from(event.target.files || []);
+    event.target.value = '';
+    loadPlantUmlFile(file);
+  };
+
+  const handleSaveFile = () => {
+    const filename = normalizePlantUmlFilename(fileLabel || 'diagram.puml');
+    downloadBlob(new Blob([source], { type: 'text/plain;charset=utf-8' }), filename);
+    setFileLabel(filename);
+    setTemporaryFileStatus(`Saved ${filename}`);
+  };
+
+  const handleDragEnter = (event) => {
+    if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragActive(true);
+  };
+
+  const handleDragOver = (event) => {
+    if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = (event) => {
+    if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+
+    if (dragDepthRef.current === 0) {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (event) => {
+    if (!Array.from(event.dataTransfer?.types || []).includes('Files')) {
+      return;
+    }
+
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActive(false);
+
+    const [file] = Array.from(event.dataTransfer.files || []);
+    loadPlantUmlFile(file);
   };
 
   const handleCopy = async () => {
@@ -845,9 +983,28 @@ const App = () => {
       : null;
 
   return (
-    <div className={`app-shell theme-${theme} ${drawerOpen ? 'is-drawer-open' : ''}`}>
+    <div
+      className={`app-shell theme-${theme} ${drawerOpen ? 'is-drawer-open' : ''} ${dragActive ? 'is-dragging-file' : ''}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="app-orb app-orb-left" aria-hidden="true" />
       <div className="app-orb app-orb-right" aria-hidden="true" />
+      <input
+        className="file-input"
+        ref={fileInputRef}
+        type="file"
+        accept={PLANTUML_FILE_ACCEPT}
+        onChange={handleFileInputChange}
+      />
+      <div className="drop-overlay" aria-hidden={!dragActive}>
+        <div className="drop-overlay-card">
+          <span className="drop-overlay-title">Drop PlantUML file</span>
+          <span className="drop-overlay-copy">Open .puml, .plantuml, .uml, .iuml, .pu, .wsd, or text files</span>
+        </div>
+      </div>
 
       <header className="app-header">
         <div className="brand-block">
@@ -948,7 +1105,11 @@ const App = () => {
         onChange={setSource}
         onClose={() => setDrawerOpen(false)}
         onCopy={handleCopy}
+        onOpenFile={handleOpenFile}
+        onSaveFile={handleSaveFile}
         copyLabel={copyLabel}
+        fileLabel={fileLabel}
+        fileStatus={fileStatus}
         editorRef={editorRef}
         renderState={renderState}
         renderError={renderError}

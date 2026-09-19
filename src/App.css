@@ -220,6 +220,52 @@ textarea {
   border: 0;
 }
 
+.file-input {
+  display: none;
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 8, 16, 0.34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.app-shell.is-dragging-file .drop-overlay {
+  opacity: 1;
+}
+
+.drop-overlay-card {
+  display: grid;
+  gap: 6px;
+  width: min(28rem, 100%);
+  padding: 18px 20px;
+  border: 1px solid rgba(246, 185, 74, 0.36);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(10, 14, 28, 0.96)),
+    var(--surface-elevated);
+  color: var(--text);
+  text-align: center;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.36);
+}
+
+.drop-overlay-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.drop-overlay-copy {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .ghost-button:hover,
 .solid-button:hover,
 .source-toggle-button:hover,
@@ -564,6 +610,18 @@ textarea {
   background: linear-gradient(180deg, rgba(59, 130, 246, 0.14), rgba(255, 255, 255, 0.9));
 }
 
+.app-shell.theme-light .drop-overlay {
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.app-shell.theme-light .drop-overlay-card {
+  border-color: rgba(59, 130, 246, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98)),
+    #ffffff;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+}
+
 .app-shell.theme-light .source-toggle-button.is-closed {
   background: linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(255, 255, 255, 0.8));
   border-color: rgba(16, 185, 129, 0.28);
@@ -773,11 +831,25 @@ textarea {
   min-height: 0;
 }
 
+.drawer-tab-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 10px;
+}
+
 .drawer-tabs {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 0 0 10px;
+}
+
+.drawer-file-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .drawer-tab {
@@ -1146,6 +1218,15 @@ textarea {
   .drawer-actions .ghost-button,
   .drawer-actions .solid-button {
     width: 100%;
+  }
+
+  .drawer-tab-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .drawer-file-actions .ghost-button {
+    flex: 1;
   }
 }
 
