@@ -182,7 +182,8 @@ textarea {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
 }
 
-.theme-toggle-button {
+.theme-toggle-button,
+.export-trigger-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -222,7 +223,8 @@ textarea {
 .ghost-button:hover,
 .solid-button:hover,
 .source-toggle-button:hover,
-.theme-toggle-button:hover {
+.theme-toggle-button:hover,
+.export-trigger-button:hover {
   transform: translateY(-1px);
 }
 
@@ -395,6 +397,92 @@ textarea {
   font-size: inherit;
 }
 
+.export-menu-shell {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.export-trigger-button {
+  cursor: pointer;
+}
+
+.export-trigger-button[aria-expanded='true'] {
+  border-color: rgba(246, 185, 74, 0.3);
+  background: linear-gradient(180deg, rgba(246, 185, 74, 0.16), rgba(255, 255, 255, 0.035));
+}
+
+.export-menu,
+.diagram-context-menu {
+  display: grid;
+  min-width: 11.5rem;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(10, 14, 28, 0.98)),
+    var(--surface-elevated);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px);
+}
+
+.export-menu {
+  position: fixed;
+  z-index: 30;
+}
+
+.diagram-context-menu {
+  position: fixed;
+  z-index: 30;
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.export-menu-item:hover:not(:disabled),
+.export-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.export-menu-item:disabled {
+  cursor: wait;
+  color: var(--muted);
+}
+
+.export-menu-divider {
+  height: 1px;
+  margin: 5px 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.export-menu-label {
+  padding: 4px 10px 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.export-menu-extension {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .diagram-stage {
   display: grid;
   place-items: center;
@@ -464,10 +552,16 @@ textarea {
 .app-shell.theme-light .shortcut-chip,
 .app-shell.theme-light .ghost-button,
 .app-shell.theme-light .source-toggle-button,
-.app-shell.theme-light .theme-toggle-button {
+.app-shell.theme-light .theme-toggle-button,
+.app-shell.theme-light .export-trigger-button {
   border-color: rgba(15, 23, 42, 0.1);
   background: rgba(255, 255, 255, 0.72);
   color: var(--text);
+}
+
+.app-shell.theme-light .export-trigger-button[aria-expanded='true'] {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.14), rgba(255, 255, 255, 0.9));
 }
 
 .app-shell.theme-light .source-toggle-button.is-closed {
@@ -529,6 +623,24 @@ textarea {
 .app-shell.theme-light .zoom-readout {
   border-right-color: rgba(15, 23, 42, 0.08);
   background: rgba(15, 23, 42, 0.03);
+}
+
+.app-shell.theme-light .export-menu,
+.app-shell.theme-light .diagram-context-menu {
+  border-color: rgba(15, 23, 42, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98)),
+    #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+}
+
+.app-shell.theme-light .export-menu-item:hover:not(:disabled),
+.app-shell.theme-light .export-menu-item:focus-visible {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.app-shell.theme-light .export-menu-divider {
+  background: rgba(15, 23, 42, 0.08);
 }
 
 .app-shell.theme-light .diagram-stage {
